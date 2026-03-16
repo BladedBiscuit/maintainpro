@@ -4,7 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>MaintainPro</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ===================== RESET & BASE ===================== */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -475,12 +474,23 @@ function initSupabase(cfg) {
   }
 }
 
-// Auto-connect on load — no setup screen needed
-(function() {
-  initSupabase({ url: SUPABASE_URL, key: SUPABASE_KEY });
+// Auto-connect on load - no setup screen needed
+function startApp() {
+  try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    setSyncStatus('online');
+  } catch(e) {
+    console.warn('Supabase init failed, running offline:', e);
+    offlineMode = true;
+  }
   document.getElementById('setup-banner').style.display = 'none';
   document.getElementById('auth-form').style.display = 'block';
-})();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 // ============================================================
 // USERS & AUTH
@@ -1184,5 +1194,6 @@ function exportPDF() {
   else showToast('Allow popups to export PDF');
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </body>
 </html>

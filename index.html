@@ -329,7 +329,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
   <!-- EQUIPMENT -->
   <div class="panel" id="panel-equipment">
     <div class="section-header"><span class="section-title">Equipment Registry</span>
-      <div style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="exportEquipCSV()">Export CSV</button><button class="btn btn-primary" onclick="openModal('equip-modal')">+ Add Equipment</button></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="exportEquipCSV()">Export CSV</button><span id="add-equip-btn-wrap"></span></div>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Equipment</th><th>Status</th><th>Hours</th><th>Health</th><th>Assigned To</th><th>Last Service</th><th>Next Due</th><th></th></tr></thead>
@@ -382,7 +382,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
 
   <!-- PARTS -->
   <div class="panel" id="panel-parts">
-    <div class="section-header"><span class="section-title">Parts & Inventory</span><button class="btn btn-primary" onclick="openModal('part-modal')">+ Add Part</button></div>
+    <div class="section-header"><span class="section-title">Parts & Inventory</span><span id="add-part-btn-wrap"></span></div>
     <div id="reorder-alerts"></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Part Name</th><th>Part #</th><th>Supplier</th><th>In Stock</th><th>Reorder At</th><th>Unit Cost</th><th>Total Value</th><th>Auto-Reorder</th><th>Status</th><th></th></tr></thead>
@@ -392,7 +392,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
 
   <!-- SUPPLIERS -->
   <div class="panel" id="panel-suppliers">
-    <div class="section-header"><span class="section-title">Supplier Management</span><button class="btn btn-primary" onclick="openModal('supplier-modal')">+ Add Supplier</button></div>
+    <div class="section-header"><span class="section-title">Supplier Management</span><span id="add-supplier-btn-wrap"></span></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Supplier Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Website</th><th>Parts</th><th></th></tr></thead>
       <tbody id="supplier-table-body"></tbody>
@@ -442,10 +442,57 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
 
   <!-- ADMIN -->
   <div class="panel" id="panel-admin">
-    <div class="section-header"><span class="section-title">User Management</span></div>
-    <div class="grid-2">
-      <div class="card"><div class="card-header"><span class="card-title">Pending Approvals</span><span class="badge bd" id="pending-count">0</span></div><div id="pending-list"></div></div>
-      <div class="card"><div class="card-header"><span class="card-title">Active Users</span></div><div id="active-list"></div></div>
+    <div class="section-header"><span class="section-title">User Management & Permissions</span></div>
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchAdminTab('approvals',this)">Pending Approvals</button>
+      <button class="tab" onclick="switchAdminTab('users',this)">Active Users</button>
+      <button class="tab" onclick="switchAdminTab('permissions',this)">Permissions</button>
+    </div>
+    <div id="admin-approvals">
+      <div class="grid-2">
+        <div class="card"><div class="card-header"><span class="card-title">Pending Approvals</span><span class="badge bd" id="pending-count">0</span></div><div id="pending-list"></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Denied</span></div><div id="denied-list"></div></div>
+      </div>
+    </div>
+    <div id="admin-users" style="display:none">
+      <div class="card" style="padding:0"><table class="data-table">
+        <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="users-table-body"></tbody>
+      </table></div>
+    </div>
+    <div id="admin-permissions" style="display:none">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Role Permissions Matrix</span></div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="permissions-matrix">
+            <thead><tr>
+              <th>Permission</th>
+              <th style="text-align:center">Admin</th>
+              <th style="text-align:center">Manager</th>
+              <th style="text-align:center">Technician</th>
+              <th style="text-align:center">Viewer</th>
+            </tr></thead>
+            <tbody id="permissions-table-body"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text2)">
+          ✅ = Allowed &nbsp;·&nbsp; ❌ = Not allowed &nbsp;·&nbsp; Admin permissions are fixed and cannot be changed.
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header"><span class="card-title">Change User Role</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group"><label class="form-label">User</label><select class="form-select" id="role-user-select" style="min-width:160px"></select></div>
+          <div class="form-group"><label class="form-label">New Role</label>
+            <select class="form-select" id="role-select">
+              <option value="manager">Manager</option>
+              <option value="tech" selected>Technician</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="changeUserRole()">Update Role</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -688,6 +735,30 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
   </div>
 </div>
 
+<!-- User Permissions Modal -->
+<div class="modal-backdrop" id="user-perms-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span class="modal-title" id="user-perms-title">Custom Permissions</span>
+      <button class="modal-close" onclick="closeModal('user-perms-modal')">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px" id="user-perms-sub"></div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+      <span style="font-size:12px;color:var(--text2)">Base role:</span>
+      <span class="badge bi" id="user-perms-role"></span>
+      <span style="font-size:11px;color:var(--text3)">— toggles below override role defaults</span>
+    </div>
+    <div id="user-perms-list"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="resetUserPerms()">Reset to Role Defaults</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="closeModal('user-perms-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveUserPerms()">Save Permissions</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Detail Modal -->
 <div class="modal-backdrop" id="detail-modal">
   <div class="modal" style="max-width:640px">
@@ -711,6 +782,26 @@ const SUPABASE_URL = 'https://ldxryhgovspckypqoqvf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeHJ5aGdvdnNwY2t5cHFvcXZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2ODk2MTksImV4cCI6MjA4OTI2NTYxOX0.rI_PLHYbp_tat5vsXDHXbc0zbokhGrBq_Tg9vFrWuSc';
 const ADMIN_USERNAME = 'tangal99';
 let currentUser = null;
+
+// ============================================================
+// PERMISSIONS
+// ============================================================
+const PERMISSIONS = {
+  admin:      { canCreate:true, canEdit:true, canDelete:true, canViewReports:true, canManageUsers:true, canManageParts:true, canManageEquip:true, canManageSuppliers:true, canViewCosts:true },
+  manager:    { canCreate:true, canEdit:true, canDelete:true, canViewReports:true, canManageUsers:false, canManageParts:true, canManageEquip:true, canManageSuppliers:true, canViewCosts:true },
+  tech:       { canCreate:true, canEdit:true, canDelete:false, canViewReports:false, canManageUsers:false, canManageParts:false, canManageEquip:false, canManageSuppliers:false, canViewCosts:false },
+  viewer:     { canCreate:false, canEdit:false, canDelete:false, canViewReports:false, canManageUsers:false, canManageParts:false, canManageEquip:false, canManageSuppliers:false, canViewCosts:false },
+};
+
+function can(permission) {
+  if(!currentUser) return false;
+  // User-level custom permissions take priority over role
+  if(currentUser.custom_permissions && currentUser.custom_permissions[permission] !== undefined) {
+    return !!currentUser.custom_permissions[permission];
+  }
+  const role = currentUser?.role || 'viewer';
+  return !!(PERMISSIONS[role]?.[permission]);
+}
 let calDate = new Date();
 
 // ============================================================
@@ -786,7 +877,13 @@ async function doLogin() {
     if (profile.status==='pending') { showErr('Your account is pending admin approval.'); btn.textContent='Sign In'; btn.disabled=false; return; }
     if (profile.status==='denied') { showErr('Access denied. Contact your administrator.'); btn.textContent='Sign In'; btn.disabled=false; return; }
     const isAdmin = username.toLowerCase()===ADMIN_USERNAME.toLowerCase();
-    currentUser = { id: profile.id, name: profile.full_name||username, role: isAdmin?'admin':'tech', username };
+    currentUser = {
+      id: profile.id,
+      name: profile.full_name||username,
+      role: isAdmin?'admin':(profile.role||'tech'),
+      username,
+      custom_permissions: profile.custom_permissions||null,
+    };
     enterApp();
   } catch(e) { showErr('Login failed. Try again.'); btn.textContent='Sign In'; btn.disabled=false; }
 }
@@ -1584,10 +1681,10 @@ function renderTasks(){
       <td>${badge(t.priority)}</td>
       <td style="color:var(--text2)">${t.assign||'—'}</td>
       <td style="color:${isOverdue(t.due)&&t.status!=='Completed'?'var(--danger)':'inherit'};font-size:12px">${fmtDate(t.due)}</td>
-      <td style="font-weight:600">$${(t.cost||0).toLocaleString()}</td>
+      <td style="font-weight:600">${can('canViewCosts')?'$'+(t.cost||0).toLocaleString():'—'}</td>
       <td style="font-size:12px">${partsUsed?partsUsed+' unit(s)':'—'}</td>
       <td>${badge(t.status)}</td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-danger" onclick="deleteTask('${t.id}')">Del</button></td>
+      <td onclick="event.stopPropagation()">${can('canDelete')?`<button class="btn btn-danger" onclick="deleteTask('${t.id}')">Del</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -1638,7 +1735,7 @@ function renderParts(){
       <td style="font-weight:600">$${(p.qty*p.cost).toLocaleString()}</td>
       <td><span class="badge ${p.auto_reorder?'bs':'bg'}">${p.auto_reorder?'On':'Off'}</span></td>
       <td><span class="badge ${out?'bd':low?'bw':'bs'}">${out?'Out':low?'Low':'OK'}</span></td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-danger" onclick="deletePart('${p.id}')">Del</button></td>
+      <td onclick="event.stopPropagation()">${can('canDelete')?`<button class="btn btn-danger" onclick="deletePart('${p.id}')">Del</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -1657,7 +1754,7 @@ function renderSuppliers(){
       <td style="color:var(--text2)">${s.phone||'—'}</td>
       <td><a href="${s.website}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent)">${s.website?'Visit':'—'}</a></td>
       <td><span class="badge bg">${partCount} part${partCount!==1?'s':''}</span></td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-danger" onclick="deleteSupplier('${s.id}')">Del</button></td>
+      <td onclick="event.stopPropagation()">${can('canDelete')?`<button class="btn btn-danger" onclick="deleteSupplier('${s.id}')">Del</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -2769,8 +2866,21 @@ async function enterApp() {
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('user-chip-name').textContent=currentUser.name;
+  // Show/hide nav items based on role
+  const nav = document.getElementById('main-nav');
+  // Remove restricted nav items for viewers
+  if(!can('canViewReports')) {
+    ['analytics'].forEach(id => {
+      const btn = Array.from(nav.querySelectorAll('.nav-btn')).find(b=>b.textContent==='Analytics');
+      if(btn) btn.style.display='none';
+    });
+  }
+  if(!can('canManageSuppliers')) {
+    const btn = Array.from(nav.querySelectorAll('.nav-btn')).find(b=>b.textContent==='Suppliers');
+    if(btn) btn.style.display='none';
+  }
+  // Add admin nav button
   if(currentUser.role==='admin') {
-    const nav=document.getElementById('main-nav');
     if(!document.getElementById('admin-nav-btn')) {
       const btn=document.createElement('button');
       btn.className='nav-btn'; btn.id='admin-nav-btn';
@@ -2778,6 +2888,19 @@ async function enterApp() {
       nav.appendChild(btn);
     }
   }
+  // Gate top action buttons
+  const addWOBtn = document.querySelector('.topbar-right .btn-primary');
+  if(addWOBtn && !can('canCreate')) addWOBtn.style.display='none';
+
+  // Render permission-gated section buttons
+  setTimeout(() => {
+    const aeWrap = document.getElementById('add-equip-btn-wrap');
+    if(aeWrap && can('canManageEquip')) aeWrap.innerHTML = "<button class=\"btn btn-primary\" onclick=\"openModal('equip-modal')\">+ Add Equipment</button>";
+    const apWrap = document.getElementById('add-part-btn-wrap');
+    if(apWrap && can('canManageParts')) apWrap.innerHTML = "<button class=\"btn btn-primary\" onclick=\"openModal('part-modal')\">+ Add Part</button>";
+    const asWrap = document.getElementById('add-supplier-btn-wrap');
+    if(asWrap && can('canManageSuppliers')) asWrap.innerHTML = "<button class=\"btn btn-primary\" onclick=\"openModal('supplier-modal')\">+ Add Supplier</button>";
+  }, 100);
   await loadState();
   await runRecurrenceEngine();
   renderDashboard();
@@ -2816,7 +2939,7 @@ function renderEquipmentTable() {
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           ${e.status!=='Down'?`<button class="btn btn-danger btn-sm" onclick="updateEquipStatus('${e.id}','Down')" title="Mark as Down">↓ Down</button>`:`<button class="btn btn-success btn-sm" onclick="updateEquipStatus('${e.id}','Operational')" title="Mark as Operational">↑ Up</button>`}
           ${currentUser?.role==='admin'?`<button class="btn btn-secondary btn-sm" onclick="printQRCode('${e.id}')" title="Print QR Code">QR</button>`:''}
-          <button class="btn btn-danger btn-sm" onclick="deleteEquip('${e.id}')">Del</button>
+          ${can('canDelete')?`<button class="btn btn-danger btn-sm" onclick="deleteEquip('${e.id}')">Del</button>`:''}
         </div>
       </td>
     </tr>`;
@@ -3150,6 +3273,250 @@ function printMachineHistory(equipId) {
   const w = window.open('','_blank');
   if(w) { w.document.write(html); w.document.close(); }
   else showToast('Allow popups to print report');
+}
+
+// ============================================================
+// ADMIN PANEL — TABS, USERS TABLE, PERMISSIONS
+// ============================================================
+function switchAdminTab(tab, btn) {
+  ['admin-approvals','admin-users','admin-permissions'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
+  document.getElementById('admin-'+tab).style.display='block';
+  document.querySelectorAll('#panel-admin .tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(tab==='users') renderUsersTable();
+  if(tab==='permissions') renderPermissionsMatrix();
+}
+
+async function renderAdminPanel() {
+  try {
+    const { data: profiles } = await window._mpdb.from('profiles').select('*').order('created_at',{ascending:false});
+    const pending = profiles.filter(p=>p.status==='pending');
+    const active  = profiles.filter(p=>p.status==='approved');
+    const denied  = profiles.filter(p=>p.status==='denied');
+
+    document.getElementById('pending-count').textContent = pending.length||'0';
+    document.getElementById('pending-list').innerHTML = pending.length ? pending.map(p=>`
+      <div class="parts-row">
+        <div style="flex:1"><div style="font-weight:500">${p.full_name}</div><div style="font-size:11px;color:var(--text2)">${p.username} · Requested ${new Date(p.created_at).toLocaleDateString()}</div></div>
+        <button class="btn btn-success btn-sm" onclick="approveUser('${p.id}','${p.full_name}')">Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="denyUser('${p.id}')">Deny</button>
+      </div>`).join('') : '<div style="color:var(--text2);font-size:13px;padding:8px 0">No pending requests</div>';
+
+    document.getElementById('denied-list').innerHTML = denied.length ? denied.map(p=>`
+      <div class="parts-row">
+        <div style="flex:1"><div style="font-weight:500">${p.full_name}</div><div style="font-size:11px;color:var(--text2)">${p.username}</div></div>
+        <button class="btn btn-secondary btn-sm" onclick="approveUser('${p.id}','${p.full_name}')">Restore</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${p.id}','${p.full_name}')">Delete</button>
+      </div>`).join('') : '<div style="color:var(--text2);font-size:13px;padding:8px 0">No denied users</div>';
+
+  } catch(e) { console.error('Admin panel error',e); }
+}
+
+async function renderUsersTable() {
+  try {
+    const { data: profiles } = await window._mpdb.from('profiles').select('*').order('created_at',{ascending:false});
+    const active = profiles.filter(p=>p.status==='approved');
+    const roleColors = { admin:'bd', manager:'bw', tech:'bi', viewer:'bg' };
+    document.getElementById('users-table-body').innerHTML = active.map(p=>`
+      <tr>
+        <td style="font-weight:500;padding-left:16px">${p.full_name}</td>
+        <td style="color:var(--text2)">${p.username}</td>
+        <td><span class="badge ${roleColors[p.role]||'bg'}">${p.role||'tech'}</span></td>
+        <td><span class="badge bs">Active</span></td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <select class="form-select" style="font-size:12px;padding:3px 6px" onchange="quickRoleChange('${p.id}',this.value)">
+              <option value="manager" ${p.role==='manager'?'selected':''}>Manager</option>
+              <option value="tech" ${(!p.role||p.role==='tech')?'selected':''}>Technician</option>
+              <option value="viewer" ${p.role==='viewer'?'selected':''}>Viewer</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="openUserPerms('${p.id}','${p.full_name}','${p.role||'tech'}',${JSON.stringify(p.custom_permissions||null)})">Customize</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUser('${p.id}','${p.full_name}')">Delete</button>
+          </div>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" style="padding:16px;color:var(--text2);text-align:center">No active users yet</td></tr>';
+
+    // Populate role change user select
+    const sel = document.getElementById('role-user-select');
+    if(sel) sel.innerHTML = active.map(p=>`<option value="${p.id}">${p.full_name} (${p.username})</option>`).join('');
+  } catch(e) { console.error('Users table error',e); }
+}
+
+function renderPermissionsMatrix() {
+  const perms = [
+    ['canCreate',       'Create work orders & schedules'],
+    ['canEdit',         'Edit work orders & records'],
+    ['canDelete',       'Delete records'],
+    ['canViewReports',  'View reports & analytics'],
+    ['canViewCosts',    'View costs & financials'],
+    ['canManageEquip',  'Add & manage equipment'],
+    ['canManageParts',  'Add & manage parts inventory'],
+    ['canManageSuppliers','Add & manage suppliers'],
+    ['canManageUsers',  'Manage users & permissions'],
+  ];
+  const roles = ['admin','manager','tech','viewer'];
+  document.getElementById('permissions-table-body').innerHTML = perms.map(([key,label])=>`
+    <tr>
+      <td style="padding-left:16px;font-weight:500">${label}</td>
+      ${roles.map(role=>`
+        <td style="text-align:center">
+          ${role==='admin'
+            ? '✅'
+            : `<input type="checkbox" ${PERMISSIONS[role]?.[key]?'checked':''} 
+               onchange="togglePermission('${role}','${key}',this.checked)"
+               style="width:16px;height:16px;cursor:pointer"/>`
+          }
+        </td>`).join('')}
+    </tr>`).join('');
+}
+
+function togglePermission(role, permission, value) {
+  if(role === 'admin') return; // admin always full
+  if(!PERMISSIONS[role]) PERMISSIONS[role] = {};
+  PERMISSIONS[role][permission] = value;
+  // Save custom permissions to localStorage
+  try {
+    const custom = {};
+    ['manager','tech','viewer'].forEach(r=>{
+      custom[r] = { ...PERMISSIONS[r] };
+    });
+    localStorage.setItem('mp_permissions', JSON.stringify(custom));
+  } catch(e) {}
+  showToast('Permission updated ✓');
+}
+
+// Load custom permissions on startup
+(function() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mp_permissions')||'null');
+    if(saved) {
+      ['manager','tech','viewer'].forEach(role=>{
+        if(saved[role]) PERMISSIONS[role] = { ...PERMISSIONS[role], ...saved[role] };
+      });
+    }
+  } catch(e) {}
+})();
+
+async function quickRoleChange(userId, newRole) {
+  try {
+    await window._mpdb.from('profiles').update({ role: newRole }).eq('id', userId);
+    showToast('Role updated to ' + newRole + ' ✓');
+  } catch(e) { showToast('Failed to update role'); }
+}
+
+async function changeUserRole() {
+  const userId = document.getElementById('role-user-select')?.value;
+  const newRole = document.getElementById('role-select')?.value;
+  if(!userId || !newRole) return;
+  await quickRoleChange(userId, newRole);
+  renderUsersTable();
+}
+
+async function approveUser(id, name) {
+  await window._mpdb.from('profiles').update({status:'approved'}).eq('id',id);
+  showToast(name+' approved ✓'); renderAdminPanel();
+}
+async function denyUser(id) {
+  await window._mpdb.from('profiles').update({status:'denied'}).eq('id',id);
+  showToast('Request denied'); renderAdminPanel();
+}
+async function deleteUser(id, name) {
+  if(!confirm('Delete '+name+'? They will no longer be able to log in.')) return;
+  await window._mpdb.from('profiles').delete().eq('id',id);
+  showToast(name+' removed'); renderAdminPanel();
+}
+
+// ============================================================
+// PER-USER PERMISSION CUSTOMIZATION
+// ============================================================
+const PERM_LABELS = {
+  canCreate:          'Create work orders & schedules',
+  canEdit:            'Edit work orders & records',
+  canDelete:          'Delete records',
+  canViewReports:     'View reports & analytics',
+  canViewCosts:       'View costs & financials',
+  canManageEquip:     'Add & manage equipment',
+  canManageParts:     'Add & manage parts inventory',
+  canManageSuppliers: 'Add & manage suppliers',
+  canManageUsers:     'Manage users & permissions',
+};
+
+let editingUserId = null;
+let editingUserRole = null;
+let editingPerms = {};
+
+function openUserPerms(userId, userName, userRole, customPerms) {
+  editingUserId = userId;
+  editingUserRole = userRole;
+
+  // Start from role defaults, then overlay any custom settings
+  const roleDefaults = PERMISSIONS[userRole] || PERMISSIONS.tech;
+  editingPerms = { ...roleDefaults, ...(customPerms||{}) };
+
+  document.getElementById('user-perms-title').textContent = userName + ' — Permissions';
+  document.getElementById('user-perms-sub').textContent =
+    'Toggle individual permissions for this user. These override their role defaults.';
+  document.getElementById('user-perms-role').textContent = userRole;
+
+  renderUserPermsList();
+  document.getElementById('user-perms-modal').classList.add('open');
+}
+
+function renderUserPermsList() {
+  const roleDefaults = PERMISSIONS[editingUserRole] || PERMISSIONS.tech;
+  document.getElementById('user-perms-list').innerHTML = Object.entries(PERM_LABELS).map(([key, label]) => {
+    const roleDefault = !!(roleDefaults[key]);
+    const current = !!(editingPerms[key]);
+    const isOverridden = current !== roleDefault;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${label}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">
+          Role default: ${roleDefault?'✅ Allowed':'❌ Not allowed'}
+          ${isOverridden?'<span style="color:var(--warning);margin-left:6px">● Overridden</span>':''}
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0;margin-left:12px">
+        <span style="font-size:12px;color:${current?'var(--success)':'var(--danger)'};font-weight:600;min-width:60px;text-align:right">${current?'Allowed':'Denied'}</span>
+        <div style="position:relative;width:40px;height:22px;flex-shrink:0">
+          <input type="checkbox" id="perm-${key}" ${current?'checked':''} 
+            onchange="editingPerms['${key}']=this.checked;renderUserPermsList()"
+            style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;z-index:2"/>
+          <div style="width:40px;height:22px;border-radius:11px;background:${current?'#3B6D11':'#E24B4A'};transition:background .2s;position:absolute;top:0;left:0"></div>
+          <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${current?'21px':'3px'};transition:left .2s;pointer-events:none"></div>
+        </div>
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function resetUserPerms() {
+  const roleDefaults = PERMISSIONS[editingUserRole] || PERMISSIONS.tech;
+  editingPerms = { ...roleDefaults };
+  renderUserPermsList();
+  showToast('Reset to role defaults');
+}
+
+async function saveUserPerms() {
+  try {
+    // Check if any perms differ from role defaults — if all match, set custom_permissions to null
+    const roleDefaults = PERMISSIONS[editingUserRole] || PERMISSIONS.tech;
+    const hasOverrides = Object.entries(editingPerms).some(([k,v]) => v !== roleDefaults[k]);
+    const toSave = hasOverrides ? editingPerms : null;
+
+    await window._mpdb.from('profiles')
+      .update({ custom_permissions: toSave })
+      .eq('id', editingUserId);
+
+    showToast('Permissions saved ✓');
+    closeModal('user-perms-modal');
+    renderUsersTable();
+  } catch(e) {
+    console.error('Save perms error:', e);
+    showToast('Failed to save permissions');
+  }
 }
 
 </script>

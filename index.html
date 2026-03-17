@@ -4715,7 +4715,7 @@ async function enterApp() {
 // Show bug button once logged in
 function showBugBtn() {
   const btn = document.getElementById('bug-btn');
-  if(btn) btn.style.display='flex';
+  if(btn) { btn.style.opacity='1'; btn.style.pointerEvents='auto'; }
 }
 
 function updateReportType() {
@@ -4804,7 +4804,7 @@ async function submitBugReport() {
 
 <!-- Bug Report Button -->
 <button id="bug-btn" onclick="openModal('bug-modal')" title="Bug report or suggestion"
-  style="position:fixed;bottom:20px;right:20px;width:44px;height:44px;border-radius:50%;background:#1a1a18;color:#fff;border:2px solid rgba(255,255,255,0.2);font-size:20px;cursor:pointer;z-index:400;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none;align-items:center;justify-content:center;transition:all .2s"
+  style="position:fixed;bottom:20px;right:20px;width:44px;height:44px;border-radius:50%;background:#1a1a18;color:#fff;border:2px solid rgba(255,255,255,0.2);font-size:20px;cursor:pointer;z-index:400;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;transition:all .2s;opacity:0;pointer-events:none"
   onmouseover="this.style.background='#185FA5';this.style.borderColor='#185FA5'"
   onmouseout="this.style.background='#1a1a18';this.style.borderColor='rgba(255,255,255,0.2)'">💬</button>
 

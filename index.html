@@ -688,8 +688,8 @@ function showPanel(id){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const panel=document.getElementById('panel-'+id);
   if(panel) panel.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b=>{ if(b.textContent.trim()===({'dashboard':'Dashboard','calendar':'Calendar','equipment':'Equipment','tasks':'Work Orders','schedule':'Schedule','parts':'Parts','suppliers':'Suppliers','documents':'Docs','analytics':'Analytics','admin':'Admin'})[id]) b.classList.add('active'); });
-  const renders={'dashboard':renderDashboard,'calendar':renderCalendar,'equipment':renderEquipmentTable,'tasks':renderTasks,'schedule':renderSchedule,'parts':renderParts,'suppliers':renderSuppliers,'documents':renderDocuments,'analytics':renderAnalytics,'admin':renderAdminPanel};
+  document.querySelectorAll('.nav-btn').forEach(b=>{ if(b.textContent.trim()===({'dashboard':'Dashboard','calendar':'Calendar','equipment':'Equipment','tasks':'Work Orders','schedule':'Schedule','parts':'Parts','suppliers':'Suppliers','documents':'Docs','analytics':'Analytics','admin':'Admin','checklists':'Checklists','chat':'Chat'})[id]) b.classList.add('active'); });
+  const renders={'dashboard':renderDashboard,'calendar':renderCalendar,'equipment':renderEquipmentTable,'tasks':renderTasks,'schedule':renderSchedule,'parts':renderParts,'suppliers':renderSuppliers,'documents':renderDocuments,'analytics':renderAnalytics,'admin':renderAdminPanel,'checklists':renderChecklistTemplates,'chat':renderChat};
   if(renders[id]) renders[id]();
 }
 
@@ -1953,30 +1953,6 @@ async function saveEquipment() {
 // ============================================================
 // PATCH: enterApp — request push, init push check
 // ============================================================
-async function enterApp() {
-  try { localStorage.setItem('mp_session', JSON.stringify(currentUser)); } catch(e) {}
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('user-chip-name').textContent=currentUser.name;
-  if(currentUser.role==='admin') {
-    const nav=document.getElementById('main-nav');
-    if(!document.getElementById('admin-nav-btn')) {
-      const btn=document.createElement('button');
-      btn.className='nav-btn'; btn.id='admin-nav-btn';
-      btn.textContent='Admin'; btn.onclick=()=>showPanel('admin');
-      nav.appendChild(btn);
-    }
-  }
-  await loadState();
-  await runRecurrenceEngine();
-  renderDashboard();
-  // Request push notifications
-  if(localStorage.getItem('mp_push')==='1') {
-    setTimeout(checkOverduePush, 2000);
-  } else if(Notification.permission === 'default') {
-    setTimeout(()=>requestPushPermission(), 4000);
-  }
-}
 
 // ============================================================
 // PATCH: renderEquipmentTable — add QR button for admin
@@ -2689,6 +2665,60 @@ document.addEventListener('DOMContentLoaded', () => {
   if(chatMsgs) chatMsgs.addEventListener('scroll', initLazyImages);
 });
 
+async function enterApp() {
+  try { localStorage.setItem('mp_session', JSON.stringify(currentUser)); } catch(e) {}
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('user-chip-name').textContent = currentUser.name;
+
+  // Load group from profile
+  try {
+    const { data: profile } = await window._mpdb.from('profiles').select('group_tag,custom_permissions,role').eq('username', currentUser.username).single();
+    if(profile?.group_tag) currentUser.group_tag = profile.group_tag;
+    if(profile?.custom_permissions) currentUser.custom_permissions = profile.custom_permissions;
+    if(profile?.role && currentUser.username.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) currentUser.role = profile.role;
+  } catch(e) {}
+
+  // Gate nav items by role
+  const nav = document.getElementById('main-nav');
+  if(!can('canViewReports')) {
+    const btn = Array.from(nav.querySelectorAll('.nav-btn')).find(b=>b.textContent.trim()==='Analytics');
+    if(btn) btn.style.display='none';
+  }
+  if(!can('canManageSuppliers')) {
+    const btn = Array.from(nav.querySelectorAll('.nav-btn')).find(b=>b.textContent.trim()==='Suppliers');
+    if(btn) btn.style.display='none';
+  }
+  if(currentUser.role==='admin') {
+    if(!document.getElementById('admin-nav-btn')) {
+      const btn = document.createElement('button');
+      btn.className='nav-btn'; btn.id='admin-nav-btn';
+      btn.textContent='Admin'; btn.onclick=()=>showPanel('admin');
+      nav.appendChild(btn);
+    }
+  }
+
+  // Gate action buttons
+  const addWOBtn = document.querySelector('.topbar-right .btn-primary');
+  if(addWOBtn && !can('canCreate')) addWOBtn.style.display='none';
+  setTimeout(()=>{
+    const aeWrap=document.getElementById('add-equip-btn-wrap');
+    if(aeWrap&&can('canManageEquip')) aeWrap.innerHTML="<button class=\"btn btn-primary\" onclick=\"openModal('equip-modal')\">+ Add Equipment</button>";
+    const apWrap=document.getElementById('add-part-btn-wrap');
+    if(apWrap&&can('canManageParts')) apWrap.innerHTML="<button class=\"btn btn-primary\" onclick=\"openModal('part-modal')\">+ Add Part</button>";
+    const asWrap=document.getElementById('add-supplier-btn-wrap');
+    if(asWrap&&can('canManageSuppliers')) asWrap.innerHTML="<button class=\"btn btn-primary\" onclick=\"openModal('supplier-modal')\">+ Add Supplier</button>";
+  }, 100);
+
+  await loadState();
+  await runRecurrenceEngine();
+  applyUserGroupFilter();
+  renderDashboard();
+  await initChat();
+  if(localStorage.getItem('mp_push')==='1') { setTimeout(checkOverduePush, 2000); }
+  else if(Notification.permission==='default') { setTimeout(()=>requestPushPermission(), 4000); }
+}
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3358,25 +3388,6 @@ async function doRegister() {
 }
 
 document.getElementById('auth-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-
-async function enterApp() {
-  try { localStorage.setItem('mp_session', JSON.stringify(currentUser)); } catch(e) {}
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('user-chip-name').textContent=currentUser.name;
-  if (currentUser.role==='admin') {
-    const nav=document.getElementById('main-nav');
-    if (!document.getElementById('admin-nav-btn')) {
-      const btn=document.createElement('button');
-      btn.className='nav-btn'; btn.id='admin-nav-btn';
-      btn.textContent='Admin'; btn.onclick=()=>showPanel('admin');
-      nav.appendChild(btn);
-    }
-  }
-  await loadState();
-  await runRecurrenceEngine();
-  renderDashboard();
-}
 
 async function signOut() {
   localStorage.removeItem('mp_session');
@@ -5012,30 +5023,6 @@ function renderDashboard() {
 // PATCH: enterApp — request push, init push check
 // ============================================================
 const _origEnterApp = enterApp;
-async function enterApp() {
-  try { localStorage.setItem('mp_session', JSON.stringify(currentUser)); } catch(e) {}
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('user-chip-name').textContent=currentUser.name;
-  if(currentUser.role==='admin') {
-    const nav=document.getElementById('main-nav');
-    if(!document.getElementById('admin-nav-btn')) {
-      const btn=document.createElement('button');
-      btn.className='nav-btn'; btn.id='admin-nav-btn';
-      btn.textContent='Admin'; btn.onclick=()=>showPanel('admin');
-      nav.appendChild(btn);
-    }
-  }
-  await loadState();
-  await runRecurrenceEngine();
-  renderDashboard();
-  // Request push notifications
-  if(localStorage.getItem('mp_push')==='1') {
-    setTimeout(checkOverduePush, 2000);
-  } else if(Notification.permission === 'default') {
-    setTimeout(()=>requestPushPermission(), 4000);
-  }
-}
 
 // ============================================================
 // PATCH: renderEquipmentTable — add QR button for admin

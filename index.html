@@ -1349,7 +1349,7 @@ function toggleRecurType(){
 function renderEquipmentTable(){
   document.getElementById('equip-table-body').innerHTML=state.equipment.map(e=>{
     const score=calcHealth(e.id);
-    const icon=e.photos&&e.photos.length?`<img src="${e.photos[0]}" style="width:100%;height:100%;object-fit:cover"/>` : (ICONS[e.type]||'⚙');
+    const icon=e.photos&&e.photos.length?`<img data-src="${e.photos[0]}" src="" class="lazy-img" style="width:100%;height:100%;object-fit:cover"/>` : (ICONS[e.type]||'⚙');
     return `<tr onclick="openEquipDetail('${e.id}')">
       <td><div style="display:flex;align-items:center;gap:9px">
         <div class="equip-icon" style="width:32px;height:32px">${icon}</div>
@@ -3263,6 +3263,43 @@ function renderDashboard(){
   if(document.getElementById('recent-obs-list'))renderRecentObservations();
   if(document.getElementById('fleet-health-dash'))renderFleetHealthDash();
 }
+
+// ============================================================
+// LAZY IMAGE LOADING
+// ============================================================
+const lazyObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting) {
+      const img = entry.target;
+      const src = img.getAttribute('data-src');
+      if(src) {
+        img.src = src;
+        img.removeAttribute('data-src');
+        lazyObserver.unobserve(img);
+      }
+    }
+  });
+}, { rootMargin: '100px' });
+
+// Call this after any content with lazy images is rendered
+function initLazyImages() {
+  document.querySelectorAll('img.lazy-img[data-src]').forEach(img => {
+    lazyObserver.observe(img);
+  });
+}
+
+// Auto-init on panel switches and modal opens
+const _origOpenModal = openModal;
+function openModal(id) {
+  _origOpenModal(id);
+  setTimeout(initLazyImages, 50);
+}
+
+// Also init on scroll in chat
+document.addEventListener('DOMContentLoaded', () => {
+  const chatMsgs = document.getElementById('chat-messages');
+  if(chatMsgs) chatMsgs.addEventListener('scroll', initLazyImages);
+});
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
@@ -6298,6 +6335,43 @@ function renderDashboard(){
   if(document.getElementById('recent-obs-list'))renderRecentObservations();
   if(document.getElementById('fleet-health-dash'))renderFleetHealthDash();
 }
+
+// ============================================================
+// LAZY IMAGE LOADING
+// ============================================================
+const lazyObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting) {
+      const img = entry.target;
+      const src = img.getAttribute('data-src');
+      if(src) {
+        img.src = src;
+        img.removeAttribute('data-src');
+        lazyObserver.unobserve(img);
+      }
+    }
+  });
+}, { rootMargin: '100px' });
+
+// Call this after any content with lazy images is rendered
+function initLazyImages() {
+  document.querySelectorAll('img.lazy-img[data-src]').forEach(img => {
+    lazyObserver.observe(img);
+  });
+}
+
+// Auto-init on panel switches and modal opens
+const _origOpenModal = openModal;
+function openModal(id) {
+  _origOpenModal(id);
+  setTimeout(initLazyImages, 50);
+}
+
+// Also init on scroll in chat
+document.addEventListener('DOMContentLoaded', () => {
+  const chatMsgs = document.getElementById('chat-messages');
+  if(chatMsgs) chatMsgs.addEventListener('scroll', initLazyImages);
+});
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>

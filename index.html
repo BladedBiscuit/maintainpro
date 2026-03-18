@@ -627,6 +627,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
       <div class="form-grid">
         <div class="form-group full"><label class="form-label">Equipment Name *</label><input class="form-input" id="e-name" placeholder="e.g. Caterpillar Excavator 320"/></div>
         <div class="form-group"><label class="form-label">Type</label><input class="form-input" id="e-type" placeholder="e.g. Excavator"/></div>
+        <div class="form-group"><label class="form-label">Manufacturer</label><input class="form-input" id="e-manufacturer" placeholder="e.g. Caterpillar, Komatsu, Deere"/></div>
         <div class="form-group"><label class="form-label">Serial / Asset #</label><input class="form-input" id="e-serial" placeholder="SN-00123"/></div>
         <div class="form-group"><label class="form-label">Current Hours</label><input class="form-input" id="e-hours" type="number" min="0" placeholder="0"/></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="e-status"><option>Operational</option><option>In Service</option><option>Down</option><option>Standby</option></select></div>
@@ -2593,7 +2594,7 @@ async function saveEquipment() {
   await persist('equipment','upsert',record);
   pendingPhotos.equip=[]; customFieldsTemp={};
   closeModal('equip-modal'); renderEquipmentTable(); updateMetrics();
-  ['e-name','e-type','e-serial','e-hours','e-op','e-notes','e-budget-monthly','e-budget-yearly'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['e-name','e-type','e-serial','e-hours','e-op','e-notes','e-budget-monthly','e-budget-yearly','e-manufacturer'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
 }
 
 // ============================================================

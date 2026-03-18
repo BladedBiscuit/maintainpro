@@ -780,6 +780,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
 <div id="toast"></div>
 
 <script>
+
 // ============================================================
 // CONFIG
 // ============================================================
@@ -1176,7 +1177,7 @@ function renderAlerts(){
 }
 function renderEquipListDash(){
   const el=document.getElementById('equip-list-dash');
-  el.innerHTML=state.equipment.slice(0,6).map(e=>{
+  el.innerHTML=filteredEquipment(activeGroupFilter).slice(0,6).map(e=>{
     const score=calcHealth(e.id);
     const col=e.status==='Down'?'var(--danger)':e.status==='In Service'?'var(--warning)':'var(--success)';
     const icon=e.photos&&e.photos.length?`<img src="${e.photos[0]}"/>`:(ICONS[e.type]||'⚙');
@@ -1311,7 +1312,8 @@ function toggleRecurType(){
 // EQUIPMENT
 // ============================================================
 function renderEquipmentTable(){
-  document.getElementById('equip-table-body').innerHTML=state.equipment.map(e=>{
+  const equip = equipGroupFilter==='all' ? state.equipment : state.equipment.filter(e=>e.group_tag===equipGroupFilter||e.group_tag==='both');
+  document.getElementById('equip-table-body').innerHTML=equip.map(e=>{
     const score=calcHealth(e.id);
     const icon=e.photos&&e.photos.length?`<img src="${e.photos[0]}" style="width:100%;height:100%;object-fit:cover"/>` : (ICONS[e.type]||'⚙');
     return `<tr onclick="openEquipDetail('${e.id}')">
@@ -2062,7 +2064,7 @@ function exportPDF(){
   <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th></tr></thead><tbody>
   ${state.suppliers.map(s=>`<tr><td>${s.name}</td><td>${s.contact||'—'}</td><td>${s.email||'—'}</td><td>${s.phone||'—'}</td></tr>`).join('')}
   </tbody></table>
-  <script>window.onload=()=>window.print()<\/script></body></html>`;
+  <'+'script>window.onload=()=>window.print()<\/script></body></html>`;
   const w=window.open('','_blank');
   if(w){ w.document.write(html); w.document.close(); } else showToast('Allow popups to export PDF');
 }
@@ -2366,7 +2368,7 @@ function printQRCode(equipId) {
       <button onclick="window.print()" style="padding:8px 20px;cursor:pointer;font-size:14px">🖨 Print</button>
     </div>
   </div>
-  <script>window.onload=()=>{ setTimeout(()=>window.print(), 800); }<\/script>
+  <'+'script>window.onload=()=>{ setTimeout(()=>window.print(), 800); }<\/script>
   </body></html>`);
   win.document.close();
 }
@@ -2614,7 +2616,7 @@ function printMachineHistory(equipId){
   ${docs.length?`<h2>Documents</h2>${docs.map(d=>`<div style="padding:4px 0;border-bottom:1px solid #eee;font-size:11px"><b>${d.name}</b> (${d.type})${d.expiry_date?' · Expires: '+fmtDate(d.expiry_date):''}</div>`).join('')}`:''}
   <div class="footer"><div>MTL Maintenance — Confidential</div><div>${date}</div></div>
   <div class="no-print" style="text-align:center;padding:16px"><button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer">🖨 Print / Save PDF</button></div>
-  <script>window.onload=()=>setTimeout(()=>window.print(),600)<\/script></body></html>`;
+  <'+'script>window.onload=()=>setTimeout(()=>window.print(),600)<\/script></body></html>`;
   const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();}else showToast('Allow popups to print');
 }
 
@@ -2993,9 +2995,11 @@ async function enterApp(){
   else if(Notification.permission==='default'){setTimeout(()=>requestPushPermission(),4000);}
 }
 
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 
 <!-- Checklist Template Modal -->
 <div class="modal-backdrop" id="tpl-modal">

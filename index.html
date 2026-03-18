@@ -324,7 +324,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
   <!-- CALENDAR -->
   <div class="panel" id="panel-calendar">
     <div class="section-header"><span class="section-title">Maintenance Calendar</span>
-      <div style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="openModal('recur-modal')">+ Recurrence Rule</button><button class="btn btn-primary btn-sm" onclick="openModal('sched-modal')">+ Schedule Work</button></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="openModal('recur-modal')">+ Recurrence Rule</button><button class="btn btn-primary btn-sm" onclick="openModal('sched-modal')">+ Schedule Work</button></div>
     </div>
     <div class="card">
       <div class="cal-nav">
@@ -2891,6 +2891,7 @@ async function renderUsersTable(){
       <select class="form-select" style="font-size:12px;padding:3px 6px" onchange="quickRoleChange('${p.id}',this.value)"><option value="manager" ${p.role==='manager'?'selected':''}>Manager</option><option value="tech" ${(!p.role||p.role==='tech')?'selected':''}>Tech</option><option value="viewer" ${p.role==='viewer'?'selected':''}>Viewer</option></select>
       <select class="form-select" style="font-size:12px;padding:3px 6px" onchange="quickGroupChange('${p.id}',this.value)"><option value="" ${!p.group_tag?'selected':''}>No group</option><option value="outside" ${p.group_tag==='outside'?'selected':''}>Outside</option><option value="production" ${p.group_tag==='production'?'selected':''}>Production</option></select>
       <button class="btn btn-secondary btn-sm" onclick="openUserPerms('${p.id}','${p.full_name}','${p.role||'tech'}',${JSON.stringify(p.custom_permissions||null)})">Perms</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetUserPassword('${p.id}','${p.full_name}')">Reset PW</button>
       <button class="btn btn-danger btn-sm" onclick="deleteUser('${p.id}','${p.full_name}')">Delete</button>
     </div></td></tr>`).join('')||'<tr><td colspan="5" style="padding:16px;color:var(--text2);text-align:center">No active users yet</td></tr>';
     const sel=document.getElementById('role-user-select');if(sel)sel.innerHTML=active.map(p=>`<option value="${p.id}">${p.full_name} (${p.username})</option>`).join('');
@@ -3285,6 +3286,29 @@ async function initChat() {
   // Show push reminder after login
   showPushReminder();
 }
+
+// ── RESET USER PASSWORD ──────────────────────────────────────
+async function resetUserPassword(userId, userName) {
+  const newPass = prompt('Set a new password for ' + userName + ':');
+  if(!newPass || newPass.trim().length < 4) {
+    if(newPass !== null) showToast('Password must be at least 4 characters');
+    return;
+  }
+  const confirm = prompt('Confirm new password for ' + userName + ':');
+  if(newPass !== confirm) {
+    showToast('Passwords do not match');
+    return;
+  }
+  try {
+    const hashed = await hashPassword(newPass.trim());
+    await window._mpdb.from('profiles').update({ password_hash: hashed }).eq('id', userId);
+    showToast(userName + ' password reset ✓');
+  } catch(e) {
+    showToast('Failed to reset password');
+    console.error(e);
+  }
+}
+
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>

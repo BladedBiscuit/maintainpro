@@ -516,6 +516,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
       <button class="tab active" onclick="switchAdminTab('approvals',this)" style="color:#fff;background:rgba(255,255,255,0.25);font-weight:600;border:none">Pending Approvals</button>
       <button class="tab" onclick="switchAdminTab('users',this)" style="color:rgba(255,255,255,0.8);border:none">Active Users</button>
       <button class="tab" onclick="switchAdminTab('permissions',this)" style="color:rgba(255,255,255,0.8);border:none">Permissions</button>
+      <button class="tab" onclick="switchAdminTab('deleted-msgs',this)" style="color:rgba(255,255,255,0.8);border:none">Deleted Msgs</button>
     </div>
     <div id="admin-approvals">
       <div class="grid-2">
@@ -528,6 +529,16 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
         <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="users-table-body"></tbody>
       </table></div>
+    </div>
+    <div id="admin-deleted-msgs" style="display:none">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Deleted Messages</span><span style="font-size:12px;color:var(--text2)">Recoverable for 30 days</span></div>
+        <div id="deleted-msgs-list"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header"><span class="card-title">Blocked Users</span></div>
+        <div id="blocked-users-list"></div>
+      </div>
     </div>
     <div id="admin-permissions" style="display:none">
       <div class="card">
@@ -2970,12 +2981,18 @@ function buildChatMsgHtml(msg){
   const taskN=state.tasks.find(t=>t.id===msg.task_id)?.name||'Work Order';
   const taskTag=msg.task_id?`<div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg2);color:var(--text2);border-radius:4px;padding:1px 7px;font-size:11px;cursor:pointer" onclick="openTaskDetail('${msg.task_id}')">📋 ${taskN}</div>`:'';
   const photoHtml=msg.photo?`<img src="${msg.photo}" style="max-width:240px;border-radius:var(--radius);margin-top:6px;cursor:pointer;border:1px solid var(--border)" onclick="viewPhoto('${msg.photo}')"/>`:'';
-  return `<div style="display:flex;gap:10px;padding:6px 0;align-items:flex-start;${isMe?'flex-direction:row-reverse':''}">
+  const canDelete = isMe || currentUser?.role==='admin' || currentUser?.role==='manager';
+  const canBlock = !isMe && (currentUser?.role==='admin' || currentUser?.role==='manager');
+  return `<div style="display:flex;gap:10px;padding:6px 0;align-items:flex-start;${isMe?'flex-direction:row-reverse':''}" onmouseenter="this.querySelector('.msg-actions')?.style.setProperty('opacity','1')" onmouseleave="this.querySelector('.msg-actions')?.style.setProperty('opacity','0')">
     <div style="width:32px;height:32px;border-radius:50%;background:${isMe?'var(--success-bg)':'var(--accent-bg)'};color:${isMe?'var(--success-text)':'var(--accent-text)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${initials}</div>
     <div style="flex:1;min-width:0;${isMe?'align-items:flex-end;display:flex;flex-direction:column':''}">
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px;${isMe?'flex-direction:row-reverse':''}">
         <span style="font-weight:600;font-size:13px">${isMe?'You':msg.author_name||msg.author}</span>
         <span style="font-size:11px;color:var(--text3)">${time}</span>
+        ${canDelete||canBlock?`<span class="msg-actions" style="opacity:0;transition:opacity .15s;display:flex;gap:4px;margin-left:4px">
+          ${canDelete?`<button onclick="deleteChatMessage('${msg.id}','${msg.channel}','${msg.author}','${(msg.body||'').replace(/'/g,'&apos;').slice(0,100)}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--danger);padding:0 3px" title="Delete message">🗑</button>`:''}
+          ${canBlock?`<button onclick="blockChatUser('${msg.author}','${msg.author_name||msg.author}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--warning);padding:0 3px" title="Block from chat">🚫</button>`:''}
+        </span>`:''}
       </div>
       <div style="background:${isMe?'var(--success-bg)':'var(--bg2)'};border-radius:${isMe?'12px 12px 2px 12px':'12px 12px 12px 2px'};padding:8px 12px">
         ${body?`<div style="font-size:13px;color:var(--text);line-height:1.5;word-break:break-word">${body}</div>`:''}${photoHtml}
@@ -2988,6 +3005,8 @@ function appendChatMessage(msg){const c=document.getElementById('chat-messages')
 async function sendChatMessage(){
   const input=document.getElementById('chat-input');const body=input?.value.trim();if(!body&&!chatPhotoData)return;
   if(!navigator.onLine){showToast('Offline');return;}
+  // Check if user is blocked from chat
+  try{const{data:p}=await window._mpdb.from('profiles').select('blocked_from_chat').eq('username',currentUser.username).single();if(p?.blocked_from_chat){showToast('You have been blocked from sending messages. Contact your admin.');return;}}catch(e){}
   const mentions=[];const re=/@([\w]+)/g;let m;while((m=re.exec(body||''))!==null)mentions.push(m[1]);
   const msg={id:uid(),channel:currentChannel,author:currentUser.username,author_name:currentUser.name,body:body||null,photo:chatPhotoData||null,equip_id:chatTagEquipId||null,task_id:chatTagTaskId||null,mentions,created_at:new Date().toISOString()};
   appendChatMessage(msg);if(input)input.value='';clearTag('equip');clearTag('task');chatPhotoData=null;document.getElementById('chat-photo-preview').textContent='';
@@ -3313,6 +3332,156 @@ async function resetUserPassword(userId, userName) {
   }
 }
 
+
+// ── DELETE CHAT MESSAGE ──────────────────────────────────────
+async function deleteChatMessage(msgId, channel, author, bodyPreview) {
+  if(!confirm('Delete this message? Admins can recover it for 30 days.')) return;
+  try {
+    // Get full message first
+    const { data: msgs } = await window._mpdb.from('chat_messages').select('*').eq('id', msgId);
+    const msg = msgs?.[0];
+    if(msg) {
+      // Save to deleted_messages
+      await window._mpdb.from('deleted_messages').insert({
+        id: uid(),
+        original_id: msgId,
+        channel: msg.channel,
+        author: msg.author,
+        author_name: msg.author_name,
+        body: msg.body,
+        photo: msg.photo,
+        deleted_by: currentUser.username,
+        deleted_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 30*24*60*60*1000).toISOString(),
+      });
+    }
+    // Delete from chat_messages
+    await window._mpdb.from('chat_messages').delete().eq('id', msgId);
+    // Remove from local state and re-render
+    state.chatMessages = state.chatMessages.filter(m => m.id !== msgId);
+    // Remove from DOM
+    const container = document.getElementById('chat-messages');
+    if(container) {
+      // Reload messages to reflect deletion
+      await loadChatMessages(currentChannel);
+    }
+    showToast('Message deleted');
+  } catch(e) {
+    console.error('Delete message error:', e);
+    showToast('Failed to delete message');
+  }
+}
+
+// ── BLOCK/UNBLOCK CHAT USER ───────────────────────────────────
+async function blockChatUser(username, displayName) {
+  if(!confirm('Block ' + displayName + ' from sending chat messages?')) return;
+  try {
+    await window._mpdb.from('profiles').update({ blocked_from_chat: true }).eq('username', username);
+    showToast(displayName + ' blocked from chat');
+    renderDmList();
+  } catch(e) {
+    showToast('Failed to block user');
+  }
+}
+
+async function unblockChatUser(username, displayName) {
+  try {
+    await window._mpdb.from('profiles').update({ blocked_from_chat: false }).eq('username', username);
+    showToast(displayName + ' unblocked');
+    renderDeletedMessages();
+  } catch(e) {
+    showToast('Failed to unblock');
+  }
+}
+
+// ── DELETED MESSAGES ADMIN VIEW ───────────────────────────────
+async function renderDeletedMessages() {
+  const listEl = document.getElementById('deleted-msgs-list');
+  const blockedEl = document.getElementById('blocked-users-list');
+  if(!listEl) return;
+
+  // Load deleted messages
+  try {
+    const { data: deleted } = await window._mpdb.from('deleted_messages')
+      .select('*')
+      .gte('expires_at', new Date().toISOString())
+      .order('deleted_at', { ascending: false });
+
+    if(!deleted || !deleted.length) {
+      listEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0">No deleted messages</div>';
+    } else {
+      listEl.innerHTML = deleted.map(m => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:13px">${m.author_name||m.author}</span>
+            <span class="badge bg">#${m.channel}</span>
+            <span style="font-size:11px;color:var(--text3)">${new Date(m.deleted_at).toLocaleDateString()} · Deleted by ${m.deleted_by}</span>
+            <span style="font-size:11px;color:var(--danger);margin-left:auto">Expires ${new Date(m.expires_at).toLocaleDateString()}</span>
+            <button class="btn btn-secondary btn-sm" onclick="recoverMessage('${m.id}','${m.original_id}')">Recover</button>
+          </div>
+          <div style="font-size:13px;color:var(--text);background:var(--bg2);padding:8px 10px;border-radius:var(--radius)">${m.body||'[photo]'}</div>
+        </div>`).join('');
+    }
+  } catch(e) { listEl.innerHTML = '<div style="color:var(--text2);font-size:13px">Could not load</div>'; }
+
+  // Load blocked users
+  if(!blockedEl) return;
+  try {
+    const { data: blocked } = await window._mpdb.from('profiles')
+      .select('username, full_name')
+      .eq('blocked_from_chat', true);
+
+    if(!blocked || !blocked.length) {
+      blockedEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0">No blocked users</div>';
+    } else {
+      blockedEl.innerHTML = blocked.map(p => `
+        <div class="parts-row">
+          <div style="flex:1"><div style="font-weight:500">${p.full_name}</div><div style="font-size:12px;color:var(--text2)">${p.username}</div></div>
+          <button class="btn btn-success btn-sm" onclick="unblockChatUser('${p.username}','${p.full_name}')">Unblock</button>
+        </div>`).join('');
+    }
+  } catch(e) {}
+}
+
+async function recoverMessage(deletedId, originalId) {
+  if(!confirm('Restore this message to the chat?')) return;
+  try {
+    const { data: dm } = await window._mpdb.from('deleted_messages').select('*').eq('id', deletedId);
+    const m = dm?.[0]; if(!m) return;
+    // Re-insert into chat_messages with original ID
+    await window._mpdb.from('chat_messages').insert({
+      id: m.original_id || uid(),
+      channel: m.channel,
+      author: m.author,
+      author_name: m.author_name,
+      body: m.body,
+      photo: m.photo,
+      created_at: new Date().toISOString(),
+    });
+    // Remove from deleted
+    await window._mpdb.from('deleted_messages').delete().eq('id', deletedId);
+    showToast('Message recovered ✓');
+    renderDeletedMessages();
+  } catch(e) { showToast('Failed to recover'); }
+}
+
+// Update switchAdminTab to handle deleted-msgs tab
+const _baseSwitchAdminTab = switchAdminTab;
+function switchAdminTab(tab, btn) {
+  ['admin-approvals','admin-users','admin-permissions','admin-deleted-msgs'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
+  document.getElementById('admin-'+tab).style.display='block';
+  document.querySelectorAll('#panel-admin .tab').forEach(b=>{
+    b.classList.remove('active');b.style.background='transparent';
+    b.style.color='rgba(255,255,255,0.8)';b.style.fontWeight='400';
+  });
+  btn.classList.add('active');btn.style.background='rgba(255,255,255,0.25)';
+  btn.style.color='#fff';btn.style.fontWeight='600';
+  if(tab==='users') renderUsersTable();
+  if(tab==='permissions') renderPermissionsMatrix();
+  if(tab==='deleted-msgs') renderDeletedMessages();
+}
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>

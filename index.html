@@ -718,6 +718,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
     <div class="form-grid">
       <div class="form-group full"><label class="form-label">Part Name *</label><input class="form-input" id="p-name" placeholder="e.g. Hydraulic Filter HF200"/></div>
       <div class="form-group"><label class="form-label">Part Number</label><input class="form-input" id="p-num" placeholder="HF-200-A"/></div>
+      <div class="form-group"><label class="form-label">Unit Cost ($)</label><input class="form-input" id="p-cost" type="number" min="0" step="0.01" placeholder="0.00"/></div>
       <div class="form-group"><label class="form-label">Supplier</label><select class="form-select" id="p-supplier-select"></select></div>
       <div class="form-group"><label class="form-label">Qty In Stock</label><input class="form-input" id="p-qty" type="number" min="0" placeholder="0"/></div>
       <div class="form-group"><label class="form-label">Reorder At (qty)</label><input class="form-input" id="p-reorder" type="number" min="0" placeholder="2"/></div>
@@ -1099,7 +1100,7 @@ function populateSelects(){
   ['t-assign','s-tech','r-assign'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=techOpts; });
   ['p-supplier-select'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=supOpts; });
   // Also populate WO part select
-  const partOpts=state.parts.map(p=>`<option value="${p.id}">${p.name} (Stock: ${p.qty})</option>`).join('');
+  const partOpts=state.parts.map(p=>`<option value="${p.id}">${p.name} (Stock: ${p.qty}${p.cost?', $'+p.cost.toFixed(2)+' ea':''})</option>`).join('');
   const psel=document.getElementById('wo-part-select'); if(psel) psel.innerHTML=partOpts;
   // populate equip filter
   const ef=document.getElementById('task-equip-filter');
@@ -1828,13 +1829,15 @@ function addPartToWO(){
   renderWOPartsList();
 }
 function renderWOPartsList(){
-  document.getElementById('wo-parts-list').innerHTML=woPartsAdded.length?woPartsAdded.map((p,i)=>
-    `<div class="parts-row">
-      <div style="flex:1"><div style="font-weight:500">${p.part_name}</div></div>
-      <span class="badge bg">Qty: ${p.qty_used}</span>
-      <button class="btn btn-danger" onclick="woPartsAdded.splice(${i},1);renderWOPartsList()">✕</button>
-    </div>`
-  ).join(''):'<div style="color:var(--text3);font-size:13px">No parts added yet</div>';
+  const total = woPartsAdded.reduce((sum,p)=>sum+(p.unit_cost||0)*p.qty_used, 0);
+  document.getElementById('wo-parts-list').innerHTML=woPartsAdded.length?
+    woPartsAdded.map((p,i)=>`<div class="parts-row">
+      <div style="flex:1"><div style="font-weight:500">${p.part_name}</div>
+        <div style="font-size:11px;color:var(--text2)">$${(p.unit_cost||0).toFixed(2)} each × ${p.qty_used} = <b>$${((p.unit_cost||0)*p.qty_used).toFixed(2)}</b></div>
+      </div>
+      <button class="btn btn-danger" onclick="woPartsAdded.splice(${i},1);renderWOPartsList();const c=document.getElementById('t-cost');if(c)c.value=woPartsAdded.reduce((s,x)=>s+(x.unit_cost||0)*x.qty_used,0).toFixed(2)">✕</button>
+    </div>`).join('')+`<div style="padding:8px 0;border-top:1px solid var(--border);font-size:13px;font-weight:600;text-align:right">Parts Total: $${total.toFixed(2)}</div>`
+    :'<div style="color:var(--text3);font-size:13px">No parts added yet</div>';
 }
 function addWOComment(){
   const body=document.getElementById('wo-comment-input').value.trim(); if(!body) return;
@@ -1853,7 +1856,9 @@ async function saveTask(){
     assign:  document.getElementById('t-assign').value,
     priority:document.getElementById('t-priority').value,
     due:     document.getElementById('t-due').value,
-    cost:    parseFloat(document.getElementById('t-cost').value)||0,
+    cost:    woPartsAdded.length>0
+      ? woPartsAdded.reduce((sum,p)=>sum+(p.unit_cost||0)*p.qty_used, 0) + (parseFloat(document.getElementById('t-cost').value)||0)
+      : parseFloat(document.getElementById('t-cost').value)||0,
     meter:   document.getElementById('t-meter').value,
     status:  document.getElementById('t-status').value,
     email_freq: parseInt(document.getElementById('t-email-freq')?.value||'7'),
@@ -1865,7 +1870,7 @@ async function saveTask(){
   await persist('tasks','upsert',record);
   // Save part usage
   for(const pu of woPartsAdded){
-    const usage={...pu, task_id:record.id, used_by:currentUser.name, used_at:new Date().toISOString()};
+    const usage={...pu, task_id:record.id, used_by:currentUser.name, used_at:new Date().toISOString(), unit_cost:pu.unit_cost||0, line_total:(pu.unit_cost||0)*pu.qty_used};
     state.partUsage.push(usage);
     await window._mpdb.from('part_usage').insert(usage);
     // Decrement stock

@@ -1172,8 +1172,9 @@ function updateMetrics(){
   const avgHealth=state.equipment.length?Math.round(state.equipment.reduce((a,e)=>a+calcHealth(e.id),0)/state.equipment.length):100;
   document.getElementById('m-total').textContent=state.equipment.length;
   document.getElementById('m-total-sub').textContent=state.equipment.filter(e=>e.status==='Operational').length+' operational';
-  document.getElementById('m-overdue').textContent=overdue;
-  document.getElementById('m-overdue').className='metric-value '+(overdue>0?'v-danger':'v-success');
+  const openAndOverdue = open + overdue;
+  document.getElementById('m-overdue').textContent=openAndOverdue;
+  document.getElementById('m-overdue').className='metric-value '+(overdue>0?'v-danger':openAndOverdue>0?'v-warning':'v-success');
   document.getElementById('m-cost').textContent='$'+cost.toLocaleString();
   document.getElementById('m-cost-sub').textContent=sign+'$'+Math.abs(diff).toLocaleString()+' vs last month';
   document.getElementById('m-parts').textContent=low;
@@ -1183,13 +1184,17 @@ function updateMetrics(){
   document.getElementById('m-open').textContent=open;
 }
 function renderAlerts(){
-  const od=state.tasks.filter(t=>t.status==='Overdue');
+  const od=state.tasks.filter(t=>t.status==='Overdue'||isOverdue(t.due)&&t.status!=='Completed');
+  const op=state.tasks.filter(t=>t.status==='Open'&&!isOverdue(t.due));
   const lp=state.parts.filter(p=>p.qty<=p.reorder);
   const exp=state.documents.filter(d=>d.expiry_date && new Date(d.expiry_date)<=new Date(Date.now()+30*24*60*60*1000));
+  const critObs=(state.observations||[]).filter(o=>o.severity==='critical');
   let h='';
   if(od.length) h+=`<div class="alert alert-d"><span class="dot"></span><b>${od.length} overdue:</b> ${od.map(t=>t.name).join(', ')}</div>`;
+  if(op.length) h+=`<div class="alert alert-w">📋 <b>${op.length} open work order${op.length>1?'s':''}:</b> ${op.map(t=>t.name).join(', ')}</div>`;
   if(lp.length) h+=`<div class="alert alert-w">⚠ <b>${lp.length} part${lp.length>1?'s':''} low/out of stock:</b> ${lp.map(p=>p.name).join(', ')}</div>`;
   if(exp.length) h+=`<div class="alert alert-w">📄 <b>${exp.length} document${exp.length>1?'s':''} expiring soon:</b> ${exp.map(d=>d.name).join(', ')}</div>`;
+  if(critObs.length) h+=`<div class="alert alert-d">🚨 <b>${critObs.length} critical observation${critObs.length>1?'s':''}:</b> ${critObs.map(o=>equipName(o.equip_id)+' — '+o.body.slice(0,50)).join(' | ')}</div>`;
   document.getElementById('alert-section').innerHTML=h;
 }
 function renderEquipListDash(){
@@ -2652,7 +2657,10 @@ async function addObservation(equipId){
     document.getElementById('obs-input-'+equipId).value='';
     document.getElementById('obs-severity-'+equipId).value='info';
     refreshObsList(equipId);
-    if(severity==='critical')await sendCriticalObsNotification(obs,equipId);
+    if(severity==='critical'){
+      await sendCriticalObsNotification(obs,equipId);
+      await autoCreateCriticalWO(obs,equipId);
+    }
     renderAlerts();if(document.getElementById('recent-obs-list'))renderRecentObservations();
   }catch(e){showToast('Failed to save');}
 }
@@ -2680,7 +2688,24 @@ async function sendCriticalObsNotification(obs,equipId){
 // ── OVERDUE EMAIL ────────────────────────────────────────────
 function scheduleOverdueCheck(task){
   const freqDays=task.email_freq!==undefined?task.email_freq:7;if(freqDays===0)return;
-  try{const schedules=JSON.parse(localStorage.getItem('mp_email_schedule')||'{}');const dueDate=new Date(task.due||Date.now());const base=dueDate<new Date()?new Date():dueDate;const sendDate=new Date(base.getTime()+freqDays*24*60*60*1000);if(!schedules[task.id]||schedules[task.id].freqDays!==freqDays){schedules[task.id]={sendAt:sendDate.toISOString(),taskId:task.id,taskName:task.name,freqDays,equipName:equipName(task.equipId),due:task.due};localStorage.setItem('mp_email_schedule',JSON.stringify(schedules));}
+  try{
+    const schedules=JSON.parse(localStorage.getItem('mp_email_schedule')||'{}');
+    const dueDate=new Date(task.due||Date.now());
+    const now=new Date();
+    let sendDate;
+    if(dueDate<now){
+      // Already overdue - if not scheduled yet, send at next frequency interval from now
+      sendDate=new Date(now.getTime()+freqDays*24*60*60*1000);
+      // If task just became overdue (due within last day), send sooner
+      const daysPastDue=(now-dueDate)/(1000*60*60*24);
+      if(daysPastDue<=1) sendDate=new Date(now.getTime()+60*60*1000); // 1 hour
+    } else {
+      sendDate=new Date(dueDate.getTime()+freqDays*24*60*60*1000);
+    }
+    if(!schedules[task.id]||schedules[task.id].freqDays!==freqDays){
+      schedules[task.id]={sendAt:sendDate.toISOString(),taskId:task.id,taskName:task.name,freqDays,equipName:equipName(task.equipId),due:task.due,priority:task.priority||'Normal'};
+      localStorage.setItem('mp_email_schedule',JSON.stringify(schedules));
+    }
   }catch(e){}
 }
 async function checkAndSendOverdueEmails(){
@@ -2690,7 +2715,7 @@ async function checkAndSendOverdueEmails(){
   }catch(e){}
 }
 async function sendOverdueEmailBatch(tasks){
-  try{const taskList=tasks.map(t=>'• '+t.name+'\n  Equipment: '+(t.equipName||equipName(t.equipId))+'\n  Due: '+t.due+'\n  Reminder: every '+(t.email_freq||7)+' day(s)').join('\n\n');emailjs.init('n5n6_xxmNNHqk0xrE');await emailjs.send('service_o320zzu','template_je3rl4j',{to_email:'tannergalloway75@gmail.com',message:taskList});showToast('📧 Overdue reminder sent');}catch(e){showToast('Email failed');}
+  try{const taskList=tasks.map(t=>'• '+t.name+'\n  Equipment: '+(t.equipName||equipName(t.equipId))+'\n  Due: '+t.due+'\n  Priority: '+(t.priority||'Normal')+'\n  Reminder: every '+(t.email_freq||7)+' day(s)').join('\n\n');emailjs.init('n5n6_xxmNNHqk0xrE');await emailjs.send('service_o320zzu','template_je3rl4j',{to_email:'tannergalloway75@gmail.com',message:taskList});showToast('📧 Overdue reminder sent');}catch(e){showToast('Email failed');}
 }
 setTimeout(checkAndSendOverdueEmails,3000);
 
@@ -3101,6 +3126,38 @@ async function permanentDeleteMessage(deletedId) {
     renderDeletedMessages();
   } catch(e) {
     showToast('Failed to delete');
+  }
+}
+
+// ── AUTO-CREATE WO FROM CRITICAL OBSERVATION ─────────────────
+async function autoCreateCriticalWO(obs, equipId) {
+  const equip = state.equipment.find(e=>e.id===equipId);
+  const today = new Date();
+  const due = new Date(today.getTime() + 24*60*60*1000); // Due tomorrow
+  const wo = {
+    id: uid(),
+    name: '🚨 Critical — ' + (equip?.name||'Equipment') + ': ' + obs.body.slice(0,60),
+    equipId: equipId,
+    type: 'Repair',
+    priority: 'High',
+    status: 'Open',
+    due: due.toISOString().split('T')[0],
+    assign: '',
+    cost: 0,
+    notes: 'Auto-created from critical obs by '+obs.author+': '+obs.body.slice(0,100),
+    checklist: '',
+    photos: [],
+    email_freq: 1,
+    created_at: new Date().toISOString(),
+  };
+  try {
+    await persist('tasks', 'upsert', wo);
+    state.tasks.push(wo);
+    showToast('🚨 Critical WO created — due tomorrow');
+    renderTasks && renderTasks();
+    renderDashboard();
+  } catch(e) {
+    console.error('Failed to auto-create WO:', e);
   }
 }
 

@@ -3686,13 +3686,13 @@ function sendPushNotification(title, body, type) {
 
 // ── RESET NOTIFICATION SETTINGS ──────────────────────────────
 function resetNotifSettings() {
-  if(!confirm('Reset your notification settings? You will be asked again whether to enable notifications.')) return;
   try {
     localStorage.removeItem('mp_push_decision');
     localStorage.removeItem('mp_push');
     localStorage.removeItem('mp_notif_prefs');
   } catch(e) {}
-  showToast('Notification settings reset — refresh the app to be asked again');
+  closeModal('notif-prefs-modal');
+  showToast('Notification settings reset ✓ — reopen the app to be prompted again');
 }
 
 </script>

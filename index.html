@@ -290,6 +290,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
       <button class="btn btn-secondary btn-sm" onclick="exportCSV()" style="color:#fff;border-color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.5)">CSV</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('task-modal')">+ Work Order</button>
       <button class="btn btn-secondary btn-sm" onclick="toggleDarkMode()" id="dark-btn" title="Toggle dark mode" style="color:#fff;border-color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.5)">🌙</button>
+      <button class="btn btn-secondary btn-sm" onclick="openModal('bug-modal')" title="Feedback / Bug report" style="color:#fff;border-color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.5)">💬</button>
       <button class="btn btn-primary btn-sm" onclick="signOut()" title="Sign out">↩ Sign Out</button>
     </div>
   </div>
@@ -940,7 +941,12 @@ function computeMonthlyCosts() {
     const y = d.getFullYear(), m = d.getMonth();
     return state.tasks.filter(t => {
       if(!t.due) return false;
-      const td = new Date(t.due);
+      // Parse date string as local time to avoid UTC shift
+      let td;
+      if(typeof t.due==='string' && /^\d{4}-\d{2}-\d{2}$/.test(t.due)){
+        const [ty,tm,tday]=t.due.split('-').map(Number);
+        td=new Date(ty,tm-1,tday);
+      } else { td=new Date(t.due); }
       return td.getFullYear()===y && td.getMonth()===m;
     }).reduce((a,t) => a+(t.cost||0), 0);
   });
@@ -1196,6 +1202,17 @@ function updateMetrics(){
   const costs=state.monthlyCosts; const cost=costs[costs.length-1]; const prev=costs[costs.length-2]||0;
   const diff=cost-prev; const sign=diff>=0?'+':'-';
   const avgHealth=state.equipment.length?Math.round(state.equipment.reduce((a,e)=>a+calcHealth(e.id),0)/state.equipment.length):100;
+  // Make metric cards clickable
+  ['m-total','m-overdue','m-cost','m-parts','m-health','m-open'].forEach(id=>{
+    const el=document.getElementById(id);
+    const card=el?.closest('.metric-card');
+    if(card&&!card.dataset.clickable){
+      card.dataset.clickable='1';
+      card.style.cursor='pointer';
+      const panelMap={'m-total':'equipment','m-overdue':'tasks','m-open':'tasks','m-cost':'analytics','m-parts':'parts','m-health':'analytics'};
+      card.onclick=()=>showPanel(panelMap[id]||'dashboard');
+    }
+  });
   document.getElementById('m-total').textContent=state.equipment.length;
   document.getElementById('m-total-sub').textContent=state.equipment.filter(e=>e.status==='Operational').length+' operational';
   const openAndOverdue = open + overdue;
@@ -1278,7 +1295,7 @@ function renderCostChart(){
   const labels=[3,2,1,0].map(ago=>{ const d=new Date(now.getFullYear(),now.getMonth()-ago,1); return MONTHS[d.getMonth()]; });
   document.getElementById('cost-chart').innerHTML=costs.map((v,i)=>
     `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
-      <div style="font-size:10px;font-weight:600">$${(v/1000).toFixed(1)}k</div>
+      <div style="font-size:10px;font-weight:600">${v>=1000?"$"+(v/1000).toFixed(1)+"k":"$"+v.toLocaleString()}</div>
       <div style="width:100%;border-radius:3px 3px 0 0;height:${Math.round(v/max*78)}px;background:${colors[i]}"></div>
       <div style="font-size:10px;color:var(--text2)">${labels[i]}</div>
     </div>`
@@ -2094,11 +2111,15 @@ async function saveDoc(){
 
 function convertToTask(schedId){
   const s=state.schedules.find(x=>x.id===schedId); if(!s)return;
-  document.getElementById('t-name').value=s.name;
-  document.getElementById('t-due').value=s.date;
-  document.getElementById('t-notes').value=s.notes||'';
   populateSelects();
-  document.getElementById('t-equip').value=s.equipId;
+  setTimeout(()=>{
+    document.getElementById('t-name').value=s.name;
+    document.getElementById('t-due').value=s.date;
+    document.getElementById('t-notes').value=s.notes||'';
+    document.getElementById('t-equip').value=s.equipId||'';
+    if(s.tech){const assign=document.getElementById('t-assign');if(assign){Array.from(assign.options).forEach(o=>{if(o.text===s.tech)o.selected=true;});}}
+    pullEquipSuppliers();
+  },50);
   openModal('task-modal');
 }
 

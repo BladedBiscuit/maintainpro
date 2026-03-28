@@ -613,6 +613,21 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
           </select>
         </div>
         <div class="form-group full"><label class="form-label">Notes</label><textarea class="form-textarea" id="t-notes" placeholder="Additional notes..."></textarea></div>
+        <div class="form-group full">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label class="form-label" style="margin:0">Tools Required</label>
+            <button class="btn btn-secondary btn-sm" onclick="suggestTools()" id="suggest-tools-btn" style="font-size:11px">✨ AI Suggest</button>
+          </div>
+          <textarea class="form-textarea" id="t-tools" placeholder="e.g. 3/4 socket set, torque wrench, grease gun..." style="min-height:60px"></textarea>
+          <div id="tools-suggestion-area" style="display:none;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 12px;margin-top:6px;font-size:13px">
+            <div style="font-weight:500;color:var(--accent-text);margin-bottom:6px">✨ AI Suggestion based on past work orders:</div>
+            <div id="tools-suggestion-text" style="color:var(--text);margin-bottom:8px"></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-primary btn-sm" onclick="acceptToolSuggestion()">Use This</button>
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('tools-suggestion-area').style.display='none'">Dismiss</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div id="wo-checklist" style="display:none">
@@ -2120,7 +2135,7 @@ async function saveTask(){
     status:  document.getElementById('t-status').value,
     email_freq: parseInt(document.getElementById('t-email-freq')?.value||'7'),
     notes:   document.getElementById('t-notes').value,
-    tools:   document.getElementById('t-tools').value,
+    tools:   document.getElementById('t-tools')?.value||'',
     photos:  pendingPhotos.task.slice(),
     checklist: document.getElementById('t-checklist').value.split('\n').filter(Boolean).map(text=>{return {text,done:false}}),
   };

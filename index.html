@@ -1612,25 +1612,46 @@ function renderAssignUsers(){
 // WORK ORDERS
 // ============================================================
 function renderTasks(){
-  const f=document.getElementById('task-filter')?.value||'all';
-  const ef=document.getElementById('task-equip-filter')?.value||'all';
-  let tasks=[...state.tasks];
-  if(f==='overdue') tasks=tasks.filter(t=>t.status==='Overdue');
-  if(f==='open')    tasks=tasks.filter(t=>t.status==='Open');
-  if(f==='completed') tasks=tasks.filter(t=>t.status==='Completed');
-  if(ef!=='all') tasks=tasks.filter(t=>t.equipId===ef);
-  tasks.sort((a,b)=>{const o={Overdue:0,Critical:1,Open:2,Completed:3}; return (o[a.status]||2)-(o[b.status]||2);});
-  document.getElementById('tasks-table-body').innerHTML=tasks.map(t=>{
-    const partsUsed=state.partUsage.filter(p=>p.task_id===t.id).reduce((a,p)=>a+p.qty_used,0);
+  // We check the filter. If no filter is selected yet, we'll default to 'active'
+  const f = document.getElementById('task-filter')?.value || 'active';
+  const ef = document.getElementById('task-equip-filter')?.value || 'all';
+  
+  let tasks = [...state.tasks];
+
+  // Logic: If 'all' or no filter is selected, HIDE completed tasks
+  if(f === 'all' || f === 'active') {
+    tasks = tasks.filter(t => t.status !== 'Completed');
+  } else if(f === 'overdue') {
+    tasks = tasks.filter(t => t.status === 'Overdue' || (isOverdue(t.due) && t.status !== 'Completed'));
+  } else if(f === 'open') {
+    tasks = tasks.filter(t => t.status === 'Open');
+  } else if(f === 'completed') {
+    tasks = tasks.filter(t => t.status === 'Completed');
+  }
+
+  if(ef !== 'all') {
+    tasks = tasks.filter(t => t.equipId === ef);
+  }
+
+  // Sort: Overdue at top, then Open, then alphabetical
+  tasks.sort((a,b) => {
+    const o = { Overdue: 0, Open: 1, Completed: 2 };
+    return (o[a.status] || 1) - (o[b.status] || 1);
+  });
+
+  document.getElementById('tasks-table-body').innerHTML = tasks.map(t => {
+    const partsUsed = state.partUsage.filter(p => p.task_id === t.id).reduce((a, p) => a + p.qty_used, 0);
+    const isActuallyOverdue = isOverdue(t.due) && t.status !== 'Completed';
+    
     return `<tr onclick="openTaskDetail('${t.id}')">
-      <td><div style="font-weight:500">${t.name}</div><div style="font-size:11px;color:var(--text2)">${t.meter||''}</div></td>
+      <td><div style="font-weight:500">${t.name}</div><div style="font-size:11px;color:var(--text2)">${t.meter || ''}</div></td>
       <td style="font-size:12px">${equipName(t.equipId)}</td>
       <td>${badge(t.priority)}</td>
-      <td style="color:var(--text2)">${t.assign||'—'}</td>
-      <td style="color:${isOverdue(t.due)&&t.status!=='Completed'?'var(--danger)':'inherit'};font-size:12px">${fmtDate(t.due)}</td>
-      <td style="font-weight:600">$${(t.cost||0).toLocaleString()}</td>
-      <td style="font-size:12px">${partsUsed?partsUsed+' unit(s)':'—'}</td>
-      <td>${badge(t.status)}</td>
+      <td style="color:var(--text2)">${t.assign || '—'}</td>
+      <td style="color:${isActuallyOverdue ? 'var(--danger)' : 'inherit'};font-size:12px">${fmtDate(t.due)}</td>
+      <td style="font-weight:600">$${(t.cost || 0).toLocaleString()}</td>
+      <td style="font-size:12px">${partsUsed ? partsUsed + ' unit(s)' : '—'}</td>
+      <td>${badge(isActuallyOverdue ? 'Overdue' : t.status)}</td>
       <td onclick="event.stopPropagation()"><button class="btn btn-danger" onclick="deleteTask('${t.id}')">Del</button></td>
     </tr>`;
   }).join('');
@@ -1906,7 +1927,7 @@ async function openTaskDetail(id){
     ${photoHtml?`<div id="dt-photos" style="display:none">${photoHtml}</div>`:''}
     
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
-      ${t.status!=='Completed'?`<button class="btn btn-primary" onclick="markComplete('${t.id}')">✓ Mark Complete</button>`:'<span class="badge bs">Completed</span>'}
+      ${t.status!=='Completed'?`<button class="btn btn-primary" onclick="('${t.id}')">✓ Mark Complete</button>`:'<span class="badge bs">Completed</span>'}
       <button class="btn btn-secondary" onclick="closeModal('detail-modal')">Close</button>
     </div>`;
   openModal('detail-modal');
@@ -1983,6 +2004,7 @@ async function markComplete(taskId) {
   closeModal('detail-modal');
   showToast('Work Order Completed ✓');
   renderDashboard();
+  renderTasks();
 }
 
 function openEquipDetail(id){

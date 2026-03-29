@@ -1291,9 +1291,49 @@ function showPanel(id){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const panel=document.getElementById('panel-'+id);
   if(panel) panel.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b=>{ if(b.textContent.trim()===({'dashboard':'Dashboard','calendar':'Calendar','equipment':'Equipment','tasks':'Work Orders','schedule':'Schedule','parts':'Parts','suppliers':'Suppliers','documents':'Docs','analytics':'Analytics','admin':'Admin'})[id]) 'memorial': 'In Memory' b.classList.add('active'); });
-  const renders={'dashboard':renderDashboard,'calendar':renderCalendar,'equipment':renderEquipmentTable,'tasks':renderTasks,'schedule':renderSchedule,'parts':renderParts,'suppliers':renderSuppliers,'documents':renderDocuments,'analytics':renderAnalytics,'admin':renderAdminPanel, 'memorial': renderMemorials };
+
+  // Mapping for navigation button highlights
+  const labels = {
+    'dashboard': 'Dashboard',
+    'calendar': 'Calendar',
+    'equipment': 'Equipment',
+    'tasks': 'Work Orders',
+    'schedule': 'Schedule',
+    'parts': 'Parts',
+    'suppliers': 'Suppliers',
+    'documents': 'Docs',
+    'analytics': 'Analytics',
+    'admin': 'Admin',
+    'checklists': 'Checklists',
+    'chat': 'Chat',
+    'memorial': 'In Memory'
+  };
+
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if(b.textContent.trim() === labels[id] || b.textContent.trim().startsWith(labels[id])) {
+      b.classList.add('active');
+    }
+  });
+
+  // Mapping for function calls to render data
+  const renders = {
+    'dashboard': renderDashboard,
+    'calendar': renderCalendar,
+    'equipment': renderEquipmentTable,
+    'tasks': renderTasks,
+    'schedule': renderSchedule,
+    'parts': renderParts,
+    'suppliers': renderSuppliers,
+    'documents': renderDocuments,
+    'analytics': renderAnalytics,
+    'admin': renderAdminPanel,
+    'checklists': renderChecklistTemplates,
+    'chat': renderChat,
+    'memorial': renderMemorials
+  };
+
   if(renders[id]) renders[id]();
+  setTimeout(initLazyImages, 100);
 }
 
 // ============================================================

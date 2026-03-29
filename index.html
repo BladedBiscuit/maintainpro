@@ -283,8 +283,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
       <button class="nav-btn" onclick="showPanel('analytics')">Analytics</button>
       <button class="nav-btn" onclick="showPanel('checklists')">Checklists</button>
       <button class="nav-btn" onclick="showPanel('chat')" id="chat-nav-btn">Chat <span id="chat-unread-badge" style="display:none;background:#E24B4A;color:#fff;border-radius:20px;padding:1px 6px;font-size:10px;margin-left:3px">0</span></button>
-     <button class="nav-btn" onclick="showPanel('memorial')">In Memory</button> 
-    </nav>
+     </nav>
     <div class="topbar-right">
       <span class="user-chip"><span class="sync-dot" id="sync-dot"></span><span id="user-chip-name"></span></span>
       <button class="btn btn-secondary btn-sm" onclick="exportPDF()" style="color:#fff;border-color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.5)">PDF</button>
@@ -513,17 +512,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
     </div>
   </div>
 
-  <!-- MEMORIAL PAGE -->
-  <div class="panel" id="panel-memorial">
-    <div class="section-header">
-      <span class="section-title">In Memory Of</span>
-      <button class="btn btn-primary" id="add-memorial-btn" onclick="openModal('memorial-modal')" style="display:none">+ Add Memorial</button>
-    </div>
-    <div id="memorial-list" class="grid-2">
-      <!-- Memorial cards will load here -->
-    </div>
-  </div>
-
+  
   <!-- ADMIN -->
   <div class="panel" id="panel-admin">
     <div class="section-header"><span class="section-title">User Management & Permissions</span></div>
@@ -825,26 +814,7 @@ body.dark-mode .btn-secondary{color:#e8e6de;border-color:#555}
   </div>
 </div>
 
-<!-- Memorial Modal -->
-<div class="modal-backdrop" id="memorial-modal">
-  <div class="modal">
-    <div class="modal-header"><span class="modal-title">Create Memorial</span><button class="modal-close" onclick="closeModal('memorial-modal')">✕</button></div>
-    <div class="form-grid">
-      <div class="form-group full"><label class="form-label">Coworker Name *</label><input class="form-input" id="mem-name" placeholder="Full Name"/></div>
-      <div class="form-group"><label class="form-label">Role/Title</label><input class="form-input" id="mem-title" placeholder="e.g. Senior Technician"/></div>
-      <div class="form-group"><label class="form-label">Years (optional)</label><input class="form-input" id="mem-dates" placeholder="e.g. 1970 - 2024"/></div>
-      <div class="form-group full"><label class="form-label">Their Story / Tribute</label><textarea class="form-textarea" id="mem-bio" style="min-height:120px" placeholder="Write a few words about them..."></textarea></div>
-      <div class="form-group full">
-        <label class="form-label">Photo</label>
-        <div class="photo-grid" id="mem-photo-grid">
-          <div class="photo-add" onclick="document.getElementById('mem-photo-input').click()">+</div>
-          <input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'memorial')"/>
-        </div>
-      </div>
-    </div>
-    <div class="form-row"><button class="btn btn-secondary" onclick="closeModal('memorial-modal')">Cancel</button><button class="btn btn-primary" onclick="saveMemorial()">Post Memorial</button></div>
-  </div>
-</div>
+
   <!-- Detail Modal -->
 <div class="modal-backdrop" id="detail-modal">
   <div class="modal" style="max-width:640px">
@@ -1127,7 +1097,7 @@ async function signOut() {
 // ============================================================
 // STATE
 // ============================================================
-let state = { equipment:[], tasks:[], schedules:[], parts:[], suppliers:[], documents:[], partUsage:[], recurrenceRules:[], monthlyCosts:[0,0,0,0], memorials:[]}; 
+let state = { equipment:[], tasks:[], schedules:[], parts:[], suppliers:[], documents:[], partUsage:[], recurrenceRules:[], monthlyCosts:[0,0,0,0]}; 
 
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
@@ -1161,7 +1131,6 @@ async function loadState() {
       window._mpdb.from('documents').select('*'),
       window._mpdb.from('part_usage').select('*'),
       window._mpdb.from('recurrence_rules').select('*'),
-      window._mpdb.from('memorials').select('*').order('created_at', {ascending: false})
     ]);
     state.equipment       = eq.data||[];
     state.tasks           = tk.data||[];
@@ -1171,7 +1140,7 @@ async function loadState() {
     state.documents       = docs.data||[];
     state.partUsage       = pu.data||[];
     state.recurrenceRules = rr.data||[];
-    state.memorials       = mem.data||[];
+    
     state.monthlyCosts    = computeMonthlyCosts();
     setSyncStatus('online');
   } catch(e) { console.error('Load error:', e); setSyncStatus('offline'); }
@@ -1331,7 +1300,6 @@ function showPanel(id){
     'admin': 'Admin',
     'checklists': 'Checklists',
     'chat': 'Chat',
-    'memorial': 'In Memory' 
   };
 
   document.querySelectorAll('.nav-btn').forEach(b => {
@@ -1353,7 +1321,6 @@ function showPanel(id){
     'admin': renderAdminPanel,
     'checklists': renderChecklistTemplates,
     'chat': renderChat,
-    'memorial': renderMemorials 
   };
 
   if(renders[id]) {
@@ -1412,7 +1379,7 @@ function switchTab(group, tab, btn){
 // ============================================================
 // PHOTOS
 // ============================================================
-let pendingPhotos={task:[],equip:[], memorial:[]};
+let pendingPhotos={task:[],equip:[]};
 let pendingDocFile=null;
 function handlePhotoUpload(input,key){
   Array.from(input.files).forEach(file=>{
@@ -2446,81 +2413,11 @@ function convertToTask(schedId){
   },50);
   openModal('task-modal');
 }
-  function renderMemorials() {
-  const container = document.getElementById('memorial-list');
-  const addBtn = document.getElementById('add-memorial-btn');
   
-  // Show the Add button for Admins and Managers
-  if(addBtn) addBtn.style.display = (currentUser.role === 'admin' || currentUser.role === 'manager') ? 'block' : 'none';
 
-  if (!state.memorials || !state.memorials.length) {
-    container.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align:center; padding:40px; color:var(--text3)">No memorials posted yet. Only Admins and Managers can add memorials.</div>';
-    return;
-  }
 
-  container.innerHTML = state.memorials.map(m => `
-    <div class="card" style="display:flex; gap:20px; align-items:flex-start; padding:24px; background: rgba(255,255,255,0.95)">
-      ${m.photo ? `<img src="${m.photo}" style="width:140px; height:140px; border-radius:var(--radius); object-fit:cover; border:1px solid var(--border); cursor:pointer" onclick="viewPhoto('${m.photo}')"/>` : 
-      `<div style="width:140px; height:140px; border-radius:var(--radius); background:var(--bg2); display:flex; align-items:center; justify-content:center; font-size:50px">👤</div>`}
-      <div style="flex:1">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px">
-            <h2 style="margin:0; font-size:20px; color:var(--text)">${m.name}</h2>
-            ${currentUser.role === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteMemorial('${m.id}')">Delete</button>` : ''}
-        </div>
-        <div style="font-weight:600; color:var(--accent); margin-bottom:2px">${m.title || ''}</div>
-        <div style="font-size:12px; color:var(--text3); margin-bottom:14px">${m.dates || ''}</div>
-        <div style="font-size:14px; line-height:1.7; color:var(--text); white-space: pre-wrap; font-style: italic">"${m.bio}"</div>
-      </div>
-    </div>
-  `).join('');
-}
 
-async function saveMemorial() {
-  const name = document.getElementById('mem-name').value.trim();
-  const bio = document.getElementById('mem-bio').value.trim();
-  
-  if (!name || !bio) { showToast('Name and Tribute are required'); return; }
 
-  const record = {
-    id: uid(),
-    name: name,
-    bio: bio,
-    title: document.getElementById('mem-title').value.trim(),
-    dates: document.getElementById('mem-dates').value.trim(),
-    photo: pendingPhotos.memorial && pendingPhotos.memorial.length ? pendingPhotos.memorial[0] : null,
-    created_at: new Date().toISOString()
-  };
-
-  try {
-    await window._mpdb.from('memorials').insert(record);
-    state.memorials.unshift(record); // Add to local list
-    
-    // Cleanup
-    pendingPhotos.memorial = [];
-    closeModal('memorial-modal');
-    renderMemorials();
-    showToast('Memorial added ✓');
-    
-    // Reset inputs
-    ['mem-name', 'mem-title', 'mem-dates', 'mem-bio'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('mem-photo-grid').innerHTML = `<div class="photo-add" onclick="document.getElementById('mem-photo-input').click()">+</div><input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'memorial')"/>`;
-  } catch (e) {
-    showToast('Error saving to database');
-    console.error(e);
-  }
-}
-
-async function deleteMemorial(id) {
-    if(!confirm('Are you sure you want to permanently delete this memorial?')) return;
-    try {
-        await window._mpdb.from('memorials').delete().eq('id', id);
-        state.memorials = state.memorials.filter(m => m.id !== id);
-        renderMemorials();
-        showToast('Deleted');
-    } catch(e) {
-        showToast('Delete failed');
-    }
-}
 
 // ============================================================
 // EXPORTS
@@ -4157,47 +4054,9 @@ function acceptToolSuggestion() {
   document.getElementById('tools-suggestion-area').style.display = 'none';
 }
 
-async function saveMemorial() {
-  const name = document.getElementById('mem-name').value.trim();
-  const bio = document.getElementById('mem-bio').value.trim();
-  if (!name || !bio) { showToast('Name and Story are required'); return; }
 
-  const record = {
-    id: uid(),
-    name,
-    bio,
-    title: document.getElementById('mem-title').value.trim(),
-    dates: document.getElementById('mem-dates').value.trim(),
-    photo: pendingPhotos.memorial && pendingPhotos.memorial.length ? pendingPhotos.memorial[0] : null
-  };
 
-  try {
-    await window._mpdb.from('memorials').insert(record);
-    state.memorials.unshift(record);
-    pendingPhotos.memorial = [];
-    closeModal('memorial-modal');
-    renderMemorials();
-    showToast('Memorial posted ✓');
-    
-    // Reset form
-    ['mem-name', 'mem-title', 'mem-dates', 'mem-bio'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('mem-photo-grid').innerHTML = `<div class="photo-add" onclick="document.getElementById('mem-photo-input').click()">+</div><input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'memorial')"/>`;
-  } catch (e) {
-    showToast('Failed to save memorial');
-  }
-}
 
-async function deleteMemorial(id) {
-    if(!confirm('Are you sure you want to delete this memorial?')) return;
-    try {
-        await window._mpdb.from('memorials').delete().eq('id', id);
-        state.memorials = state.memorials.filter(m => m.id !== id);
-        renderMemorials();
-        showToast('Memorial removed');
-    } catch(e) {
-        showToast('Delete failed');
-    }
-}
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>

@@ -1133,7 +1133,7 @@ function computeMonthlyCosts() {
 async function loadState() {
   setSyncStatus('syncing');
   try {
-    const [eq,tk,sc,pt,sup,docs,pu,rr,mem] = await Promise.all([
+    const [eq, tk, sc, pt, sup, docs, pu, rr, mem] = await Promise.all([
       window._mpdb.from('equipment').select('*'),
       window._mpdb.from('tasks').select('*'),
       window._mpdb.from('schedules').select('*'),
@@ -1152,8 +1152,8 @@ async function loadState() {
     state.documents       = docs.data||[];
     state.partUsage       = pu.data||[];
     state.recurrenceRules = rr.data||[];
+    state.memorials       = mem.data||[];
     state.monthlyCosts    = computeMonthlyCosts();
-     state.memorials = mem.data || [];
     setSyncStatus('online');
   } catch(e) { console.error('Load error:', e); setSyncStatus('offline'); }
   try{const obs=await window._mpdb.from('observations').select('*').order('created_at',{ascending:false});state.observations=obs.data||[];}catch(e){}
@@ -1343,7 +1343,7 @@ function switchTab(group, tab, btn){
 // ============================================================
 // PHOTOS
 // ============================================================
-let pendingPhotos={task:[],equip:[], memorial [] };
+let pendingPhotos={task:[],equip:[], memorial:[]};
 let pendingDocFile=null;
 function handlePhotoUpload(input,key){
   Array.from(input.files).forEach(file=>{
@@ -4013,6 +4013,48 @@ function acceptToolSuggestion() {
   document.getElementById('tools-suggestion-area').style.display = 'none';
 }
 
+async function saveMemorial() {
+  const name = document.getElementById('mem-name').value.trim();
+  const bio = document.getElementById('mem-bio').value.trim();
+  if (!name || !bio) { showToast('Name and Story are required'); return; }
+
+  const record = {
+    id: uid(),
+    name,
+    bio,
+    title: document.getElementById('mem-title').value.trim(),
+    dates: document.getElementById('mem-dates').value.trim(),
+    photo: pendingPhotos.memorial && pendingPhotos.memorial.length ? pendingPhotos.memorial[0] : null
+  };
+
+  try {
+    await window._mpdb.from('memorials').insert(record);
+    state.memorials.unshift(record);
+    pendingPhotos.memorial = [];
+    closeModal('memorial-modal');
+    renderMemorials();
+    showToast('Memorial posted ✓');
+    
+    // Reset form
+    ['mem-name', 'mem-title', 'mem-dates', 'mem-bio'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('mem-photo-grid').innerHTML = `<div class="photo-add" onclick="document.getElementById('mem-photo-input').click()">+</div><input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'memorial')"/>`;
+  } catch (e) {
+    showToast('Failed to save memorial');
+  }
+}
+
+async function deleteMemorial(id) {
+    if(!confirm('Are you sure you want to delete this memorial?')) return;
+    try {
+        await window._mpdb.from('memorials').delete().eq('id', id);
+        state.memorials = state.memorials.filter(m => m.id !== id);
+        renderMemorials();
+        showToast('Memorial removed');
+    } catch(e) {
+        showToast('Delete failed');
+    }
+}
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -4141,44 +4183,3 @@ function renderMemorials() {
   `).join('');
 }
 
-async function saveMemorial() {
-  const name = document.getElementById('mem-name').value.trim();
-  const bio = document.getElementById('mem-bio').value.trim();
-  if (!name || !bio) { showToast('Name and Story are required'); return; }
-
-  const record = {
-    id: uid(),
-    name,
-    bio,
-    title: document.getElementById('mem-title').value.trim(),
-    dates: document.getElementById('mem-dates').value.trim(),
-    photo: pendingPhotos.memorial && pendingPhotos.memorial.length ? pendingPhotos.memorial[0] : null
-  };
-
-  try {
-    await window._mpdb.from('memorials').insert(record);
-    state.memorials.unshift(record);
-    pendingPhotos.memorial = [];
-    closeModal('memorial-modal');
-    renderMemorials();
-    showToast('Memorial posted ✓');
-    
-    // Reset form
-    ['mem-name', 'mem-title', 'mem-dates', 'mem-bio'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('mem-photo-grid').innerHTML = `<div class="photo-add" onclick="document.getElementById('mem-photo-input').click()">+</div><input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'memorial')"/>`;
-  } catch (e) {
-    showToast('Failed to save memorial');
-  }
-}
-
-async function deleteMemorial(id) {
-    if(!confirm('Are you sure you want to delete this memorial?')) return;
-    try {
-        await window._mpdb.from('memorials').delete().eq('id', id);
-        state.memorials = state.memorials.filter(m => m.id !== id);
-        renderMemorials();
-        showToast('Memorial removed');
-    } catch(e) {
-        showToast('Delete failed');
-    }
-}
